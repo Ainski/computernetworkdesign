@@ -1567,3 +1567,483 @@ exit
 write memory
 ```
 
+#### 3.2.1.2 Core-Ext-2
+
+```
+enable
+configure terminal
+
+hostname Core-Ext-2
+no ip domain-lookup
+
+! 创建办公外网相关VLAN
+vlan 210
+ name Admin_Office
+exit
+vlan 220
+ name Ext_Router
+exit
+vlan 230
+ name Finance_Server
+exit
+vlan 240
+ name Guest_Wireless
+exit
+vlan 40
+ name Management
+exit
+vlan 50
+ name AP_Management_Ext
+exit
+
+! 双核心互联 - 链路聚合配置
+interface range GigabitEthernet1/0/1 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+exit
+
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ no shutdown
+exit
+
+! 管理VLAN配置
+interface Vlan40
+ ip address 10.10.40.34 255.255.255.0
+ no shutdown
+ standby 40 ip 10.10.40.254
+ standby 40 priority 100
+ standby 40 preempt
+exit
+
+! AP管理VLAN配置（办公外网AP）
+interface Vlan50
+ ip address 10.10.50.2 255.255.255.0
+ no shutdown
+ standby 50 ip 10.10.50.254
+ standby 50 priority 100
+ standby 50 preempt
+exit
+
+! ========== VLAN 210（行政办公电脑）- VRRP 配置（备核心） ==========
+interface Vlan210
+ ip address 10.10.210.2 255.255.255.0
+ no shutdown
+ standby 210 ip 10.10.210.254
+ standby 210 priority 100
+ standby 210 preempt
+exit
+
+! ========== VLAN 220（外网路由器）- VRRP 配置（备核心） ==========
+interface Vlan220
+ ip address 10.10.220.2 255.255.255.240
+ no shutdown
+ standby 220 ip 10.10.220.14
+ standby 220 priority 100
+ standby 220 preempt
+exit
+
+! ========== VLAN 230（财务行政服务器）- VRRP 配置（备核心） ==========
+interface Vlan230
+ ip address 10.10.230.2 255.255.255.240
+ no shutdown
+ standby 230 ip 10.10.230.14
+ standby 230 priority 100
+ standby 230 preempt
+exit
+
+! ========== VLAN 240（客户病房无线网络）- VRRP 配置（备核心） ==========
+interface Vlan240
+ ip address 10.20.0.2 255.255.240.0
+ no shutdown
+ standby 240 ip 10.20.15.254
+ standby 240 priority 100
+ standby 240 preempt
+exit
+
+! 启用三层路由
+ip routing
+
+! DHCP备用地址池配置
+ip dhcp pool VLAN210-Admin-Backup
+ network 10.10.210.0 255.255.255.0
+ default-router 10.10.210.254
+
+ip dhcp excluded-address 10.10.210.1
+ip dhcp excluded-address 10.10.210.2
+ip dhcp excluded-address 10.10.210.3
+ip dhcp excluded-address 10.10.210.254
+
+ip dhcp pool VLAN240-Guest-Backup
+ network 10.20.0.0 255.255.240.0
+ default-router 10.20.15.254
+
+ip dhcp excluded-address 10.20.0.1
+ip dhcp excluded-address 10.20.0.2
+ip dhcp excluded-address 10.20.15.254
+
+! DHCP中继配置
+interface Vlan210
+ ip helper-address 10.10.210.1
+exit
+interface Vlan240
+ ip helper-address 10.20.0.1
+exit
+
+! 生成树配置
+spanning-tree mode rapid-pvst
+spanning-tree vlan 210,220,230,240,50 root secondary  
+
+! 保存配置
+exit
+write memory
+```
+
+
+
+#### 3.2.1.3 配置验证
+
+使用g 1/0/24测试
+
+```
+en
+conf t
+int g 1/0/4
+sw mode acc
+sw acc vlan 210
+no sh
+exit
+
+```
+
+### 3.2.2 行政办公汇聚层配置
+
+#### 3.2.2.1 Core-Ext-1 补充配置
+
+```
+enable
+configure terminal
+
+! ========== 1. 对接 Dist-Ext-Admin-1 的接口（G1/0/3） ==========
+interface GigabitEthernet1/0/3
+ switchport trunk encapsulation dot1q 
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 2. 对接 Dist-Ext-Admin-2 的接口（G1/0/4） ==========
+interface GigabitEthernet1/0/4
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 3. 配置管理VLAN 40的虚拟网关（VRRP） ==========
+! 办公外网核心层管理VLAN虚拟网关，汇聚层默认网关指向此地址
+interface Vlan40
+ standby 40 ip 10.10.40.254    
+ ! 管理VLAN虚拟网关统一为10.10.40.254
+ standby 40 priority 120       
+ ! Core-Ext-1作为主网关
+ standby 40 preempt            
+ ! 抢占模式，确保主网关故障恢复后切回
+exit
+
+! ========== 4. 启用生成树（防环路，办公外网必备） ==========
+spanning-tree mode rapid-pvst        
+! 快速生成树，秒级故障切换
+spanning-tree vlan 210,40 root primary 
+! Core-Ext-1作为VLAN210（行政办公）/40的主根桥
+
+! 保存配置
+exit
+write memory
+```
+
+#### 3.2.2.2 Core-Ext-2 补充配置
+
+```
+enable
+configure terminal
+
+! ========== 1. 对接 Dist-Ext-Admin-1 的接口（G1/0/3） ==========
+interface GigabitEthernet1/0/3
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 2. 对接 Dist-Ext-Admin-2 的接口（G1/0/4） ==========
+interface GigabitEthernet1/0/4
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 3. 配置管理VLAN 40的虚拟网关（VRRP） ==========
+interface Vlan40
+ standby 40 ip 10.10.40.254    
+ ! 和Core-Ext-1一致的虚拟网关
+ standby 40 priority 100       
+ ! Core-Ext-2作为备网关
+ standby 40 preempt            
+ ! 抢占模式
+exit
+
+! ========== 4. 启用生成树 ==========
+spanning-tree mode rapid-pvst
+spanning-tree vlan 210,40 root secondary  
+! Core-Ext-2作为VLAN210/40的备用根桥
+
+! 保存配置
+exit
+write memory
+```
+
+#### 3.2.2.3 Dist-Ext-Admin-1
+
+```
+enable
+configure terminal
+
+hostname Dist-Ext-Admin-1
+no ip domain-lookup
+
+! 创建业务VLAN和管理VLAN
+vlan 210
+ name Admin_Workstation
+exit
+vlan 40
+ name Management
+exit
+
+! ========== 上联 Core-Ext-1 的接口（Fa0/1） ==========
+interface FastEthernet0/1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 上联 Core-Ext-2 的接口（Fa0/2） ==========
+interface FastEthernet0/2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 管理VLAN配置（运维用） ==========
+interface Vlan40
+ ip address 10.10.40.35 255.255.255.0
+ no shutdown
+exit
+
+! 管理网关指向核心层虚拟网关
+ip default-gateway 10.10.40.254
+
+! ========== 下联行政接入交换机接口（Fa0/3 - 24） ==========
+interface range FastEthernet0/3 - 24
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 生成树配置 ==========
+spanning-tree mode rapid-pvst
+
+! 保存配置
+exit
+write memory
+```
+
+#### 3.2.2.4 Dist-Ext-Admin-2
+
+```
+enable
+configure terminal
+
+hostname Dist-Ext-Admin-2
+no ip domain-lookup
+
+! 创建业务VLAN和管理VLAN
+vlan 210
+ name Admin_Workstation
+exit
+vlan 40
+ name Management
+exit
+
+! ========== 上联 Core-Ext-1 的接口（Fa0/1） ==========
+interface FastEthernet0/1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 上联 Core-Ext-2 的接口（Fa0/2） ==========
+interface FastEthernet0/2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 管理VLAN配置（运维用） ==========
+interface Vlan40
+ ip address 10.10.40.36 255.255.255.0
+ no shutdown
+exit
+
+! 管理网关指向核心层虚拟网关
+ip default-gateway 10.10.40.254
+
+! ========== 下联行政接入交换机接口（Fa0/3 - 24） ==========
+interface range FastEthernet0/3 - 24
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 生成树配置 ==========
+spanning-tree mode rapid-pvst
+
+! 保存配置
+exit
+write memory
+```
+
+#### 3.2.2.5 配置验证
+
+断开Dist-Ext-Admin与Core-Ext-1之间的连接后，仍然能ping通
+
+```
+Dist-Ext-Admin-1#ping 10.10.40.36
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 10.10.40.36, timeout is 2 seconds:
+!!!!!
+Success rate is 100 percent (5/5), round-trip min/avg/max = 0/0/0 ms
+
+Dist-Ext-Admin-1#ping 10.10.40.33
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 10.10.40.33, timeout is 2 seconds:
+.!!!!
+Success rate is 80 percent (4/5), round-trip min/avg/max = 0/0/1 ms
+
+Dist-Ext-Admin-1#ping 10.10.40.34
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 10.10.40.34, timeout is 2 seconds:
+.!!!!
+Success rate is 80 percent (4/5), round-trip min/avg/max = 0/0/1 ms
+
+Dist-Ext-Admin-1#ping 10.10.40.254
+
+Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to 10.10.40.254, timeout is 2 seconds:
+.!!!!
+Success rate is 80 percent (4/5), round-trip min/avg/max = 0/0/0 ms
+
+Dist-Ext-Admin-1#
+```
+
+### 3.2.3 行政办公接入层
+
+#### 3.2.3.1 Acc-Ext-Office-1
+
+```
+enable
+configure terminal
+
+! 基础配置
+hostname Acc-Ext-Office-1
+no ip domain-lookup
+
+! 创建业务VLAN和管理VLAN
+vlan 210
+ name Admin_Workstation
+exit
+vlan 40
+ name Management
+exit
+
+! ========== 上联 Dist-Ext-Admin-1（Fa0/3） ==========
+interface FastEthernet0/1
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40  
+ no shutdown
+exit
+
+! ========== 上联 Dist-Ext-Admin-2（Fa0/3） ==========
+interface FastEthernet0/2
+ switchport mode trunk
+ switchport trunk allowed vlan 210,40
+ no shutdown
+exit
+
+! ========== 管理VLAN配置（运维用） ==========
+interface Vlan40
+ ip address 10.10.40.37 255.255.255.0  
+ ! 接入层管理地址，按清单分配为10.10.40.37
+ no shutdown
+exit
+
+! 管理网关指向核心层虚拟网关
+ip default-gateway 10.10.40.254
+
+! ========== 下联终端接口配置 ==========
+! Fa0/3 专用于管理电脑PC5（静态绑定，区分普通办公终端）
+interface FastEthernet0/3
+ switchport mode access 
+ switchport access vlan 210
+ no shutdown
+ ! 可选：配置端口安全，仅允许PC5的MAC地址接入（增强安全性）
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky  
+ ! 自动绑定接入设备MAC（也可手动指定PC5的MAC）
+exit
+
+! Fa0/4 - 24 为普通行政办公终端接口（动态DHCP分配）
+interface range FastEthernet0/4 - 24
+ switchport mode access 
+ switchport access vlan 210
+ no shutdown
+ ! 基础端口安全（可选）
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+exit
+
+! ========== 生成树配置（防环路，冗余必备） ==========
+spanning-tree mode rapid-pvst
+! 优化接入层生成树（可选，加速终端接入）
+spanning-tree portfast default
+
+! 保存配置
+exit
+write memory
+```
+
+#### 3.2.3.2 配置验证
+
+管理员ip 10.10.210.3
+
+![image-20260312002158668](./images/image-20260312002158668.png)
+
+dhcp
+
+![image-20260312002206027](./images/image-20260312002206027.png)
