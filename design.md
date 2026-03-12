@@ -1,4 +1,4 @@
-# 医院信息化网络改造设计
+# 	医院信息化网络改造设计
 
 ## 一、用户需求
 
@@ -272,7 +272,9 @@ ip dhcp excluded-address 10.10.20.2
 ip dhcp excluded-address 10.10.20.254
 
 
- 
+spanning-tree mode rapid-pvst        
+spanning-tree vlan 10,20,30,40 root primary 
+spanning-tree vlan 10,20,30,40 priority 4096
 ! 保存配置
 exit
 write memory
@@ -410,6 +412,9 @@ interface Vlan20
  ip helper-address 10.10.20.1
 exit
 
+spanning-tree mode rapid-pvst        
+spanning-tree vlan 10,20,30,40 root secondary 
+spanning-tree vlan 10,20,30,40 priority 8192
 ! 保存配置
 exit
 write memory
@@ -487,6 +492,7 @@ interface GigabitEthernet1/0/3
  switchport trunk encapsulation dot1q 
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none
  no shutdown
 exit
 
@@ -495,6 +501,7 @@ interface GigabitEthernet1/0/4
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none 
  no shutdown
 exit
 
@@ -531,6 +538,7 @@ interface GigabitEthernet1/0/3
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none
  no shutdown
 exit
 
@@ -539,6 +547,7 @@ interface GigabitEthernet1/0/4
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none 
  no shutdown
 exit
 
@@ -583,6 +592,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none
  no shutdown
 exit
 
@@ -590,6 +600,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none
  no shutdown
 exit
 
@@ -633,6 +644,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none 
  no shutdown
 exit
 
@@ -640,6 +652,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 10,40
+ sw none 
  no shutdown
 exit
 
@@ -920,6 +933,7 @@ interface GigabitEthernet1/0/5
  switchport trunk encapsulation dot1q 
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none 
  no shutdown
 exit
 
@@ -928,6 +942,7 @@ interface GigabitEthernet1/0/6
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none 
  no shutdown
 exit
 
@@ -990,6 +1005,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none 
  no shutdown
 exit
 
@@ -997,6 +1013,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none
  no shutdown
 exit
 
@@ -1039,6 +1056,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none
  no shutdown
 exit
 
@@ -1046,6 +1064,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 20,40
+ sw none
  no shutdown
 exit
 
@@ -1732,6 +1751,7 @@ interface GigabitEthernet1/0/3
  switchport trunk encapsulation dot1q 
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1740,6 +1760,7 @@ interface GigabitEthernet1/0/4
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1776,6 +1797,7 @@ interface GigabitEthernet1/0/3
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1784,6 +1806,7 @@ interface GigabitEthernet1/0/4
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1829,6 +1852,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1837,6 +1861,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1887,6 +1912,7 @@ interface FastEthernet0/1
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -1895,6 +1921,7 @@ interface FastEthernet0/2
  switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport trunk allowed vlan 210,40
+ switchport nonegotiate
  no shutdown
 exit
 
@@ -2047,3 +2074,113 @@ write memory
 dhcp
 
 ![image-20260312002206027](./images/image-20260312002206027.png)
+
+### 3.2.4 服务器
+
+#### 3.2.4.1 Switch-Ext-Server
+
+```
+enable
+configure terminal
+
+! 基础配置
+hostname Switch-Ext-Server
+no ip domain-lookup 
+
+! 创建业务VLAN和管理VLAN
+vlan 230
+ name Finance_Admin_Server
+exit
+vlan 40
+ name Management
+exit
+
+! ========== 上联 Core-Ext-1（Fa0/1） ==========
+interface FastEthernet0/1
+
+ switchport mode trunk
+ switchport trunk allowed vlan 40,230
+ no shutdown
+exit
+
+! ========== 上联 Core-Ext-2（Fa0/2） ==========
+interface FastEthernet0/2
+ switchport mode trunk
+ switchport trunk allowed vlan 40,230
+ no shutdown
+exit
+
+! ========== 管理VLAN配置（运维用） ==========
+interface Vlan40
+ ip address 10.10.40.56 255.255.255.0
+ no shutdown
+exit
+
+! 管理网关指向核心层管理VLAN虚拟网关
+ip default-gateway 10.10.40.254
+
+! ========== 下联财务行政服务器（终端接口） ==========
+interface range FastEthernet0/3 - 24
+ switchport mode access
+ switchport access vlan 230
+ no shutdown
+exit
+
+! ========== 生成树配置（防环路，冗余必备） ==========
+spanning-tree mode rapid-pvst
+no spanning-tree portfast default
+no spanning-tree portfast bpduguard default
+spanning-tree vlan 230,40 priority 24576
+
+exit
+write memory 
+```
+
+#### 3.2.4.2 Core-Ext-1 补充配置
+
+```
+enable
+configure terminal
+
+! 对接Switch-Ext-Server的G1/0/5接口
+interface GigabitEthernet1/0/5
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport nonegotiate
+ switchport trunk allowed vlan 40,230
+ no shutdown
+ speed auto
+ duplex auto
+exit
+
+spanning-tree vlan 230 root primary
+
+exit
+write memory
+```
+
+#### 3.2.4.3 Core-Ext-2 补充配置
+
+```
+enable
+configure terminal
+
+! 对接Switch-Ext-Server的G1/0/5接口
+interface GigabitEthernet1/0/5
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport nonegotiate
+ switchport trunk allowed vlan 40,230
+ no shutdown
+ speed auto
+ duplex auto
+exit
+
+! 生成树优化（VLAN230备用根桥）
+spanning-tree vlan 230 root secondary
+
+exit
+write memory
+```
+
+### 3.2.5 外网配置
